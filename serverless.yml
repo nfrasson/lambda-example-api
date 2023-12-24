@@ -1,0 +1,191 @@
+service: lambda-api-example
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  stage: dev
+  region: sa-east-1
+  runtime: nodejs18.x
+  timeout: 10
+  memorySize: 512
+  versionFunctions: false
+  apiGateway:
+    shouldStartNameWithService: true
+  environment:
+    POSTGRES_USER: mydbuser
+    POSTGRES_PASSWORD: mydbpassword
+  vpc:
+    securityGroupIds:
+      - Ref: LambdaSecurityGroup
+    subnetIds:
+      - Ref: SubnetA
+      - Ref: SubnetB
+
+layers:
+  layerDefault:
+    name: ${self:service}-${self:provider.stage}-layerDefault
+    path: layers/layerDefault
+
+package:
+  patterns:
+    - "!*.json"
+    - "!layers/**"
+    - "!node_modules/**"
+    - "!src/**"
+
+functions:
+  userLogin:
+    handler: dist/functions/userLogin.handler
+    events:
+      - http:
+          path: /user/login
+          method: post
+          cors: true
+    layers:
+      - !Ref LayerDefaultLambdaLayer
+    environment:
+      POSTGRES_HOST:
+        Fn::GetAtt: [RDSProxy, Endpoint]
+
+  userRegister:
+    handler: dist/functions/userRegister.handler
+    events:
+      - http:
+          path: /user/register
+          method: post
+          cors: true
+    layers:
+      - !Ref LayerDefaultLambdaLayer
+    environment:
+      POSTGRES_HOST:
+        Fn::GetAtt: [RDSProxy, Endpoint]
+
+resources:
+  Resources:
+    VPC:
+      Type: "AWS::EC2::VPC"
+      Properties:
+        CidrBlock: "10.0.0.0/16"
+        EnableDnsSupport: "true"
+        EnableDnsHostnames: "true"
+
+    InternetGateway:
+      Type: "AWS::EC2::InternetGateway"
+
+    AttachGateway:
+      Type: "AWS::EC2::VPCGatewayAttachment"
+      Properties:
+        VpcId:
+          Ref: VPC
+        InternetGatewayId:
+          Ref: InternetGateway
+
+    SubnetA:
+      Type: "AWS::EC2::Subnet"
+      Properties:
+        VpcId:
+          Ref: VPC
+        CidrBlock: "10.0.1.0/24"
+        AvailabilityZone: "sa-east-1a"
+
+    SubnetB:
+      Type: "AWS::EC2::Subnet"
+      Properties:
+        VpcId:
+          Ref: VPC
+        CidrBlock: "10.0.2.0/24"
+        AvailabilityZone: "sa-east-1b"
+
+    LambdaSecurityGroup:
+      Type: "AWS::EC2::SecurityGroup"
+      Properties:
+        GroupDescription: "Access to the RDS instance from Lambda"
+        VpcId:
+          Ref: VPC
+
+    RDSSecret:
+      Type: AWS::SecretsManager::Secret
+      Properties:
+        Name: "RDSProxySecret"
+        Description: "Secret for RDS Proxy"
+        SecretString:
+          Fn::Sub: '{"username": "mydbuser", "password": "mydbpassword"}'
+
+    RDSInstance:
+      Type: AWS::RDS::DBInstance
+      Properties:
+        DBName: lambda_api_example
+        AllocatedStorage: 5
+        DBInstanceClass: db.t3.micro
+        Engine: postgres
+        MasterUsername: ${self:provider.environment.POSTGRES_USER}
+        MasterUserPassword: ${self:provider.environment.POSTGRES_PASSWORD}
+        VPCSecurityGroups:
+          - Ref: LambdaSecurityGroup
+        DBSubnetGroupName: !Ref DBSubnetGroup
+        PubliclyAccessible: true
+
+    DBSubnetGroup:
+      Type: "AWS::RDS::DBSubnetGroup"
+      Properties:
+        DBSubnetGroupDescription: "Subnet group for RDS"
+        SubnetIds:
+          - Ref: SubnetA
+          - Ref: SubnetB
+
+    RDSProxyRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: rds.amazonaws.com
+              Action: sts:AssumeRole
+        Policies:
+          - PolicyName: AccessSecretsManager
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - secretsmanager:GetSecretValue
+                  Resource:
+                    - Ref: RDSSecret
+
+    RDSProxy:
+      Type: AWS::RDS::DBProxy
+      Properties:
+        DBProxyName: db-proxy
+        EngineFamily: POSTGRESQL
+        RoleArn:
+          Fn::GetAtt: RDSProxyRole.Arn
+        Auth:
+          - AuthScheme: SECRETS
+            SecretArn:
+              Ref: RDSSecret
+            IAMAuth: DISABLED
+        VpcSecurityGroupIds:
+          - Ref: LambdaSecurityGroup
+        VpcSubnetIds:
+          - Ref: SubnetA
+          - Ref: SubnetB
+        RequireTLS: true
+
+    ProxyTargetGroup:
+      Type: AWS::RDS::DBProxyTargetGroup
+      Properties:
+        DBProxyName: db-proxy
+        TargetGroupName: default
+        DBInstanceIdentifiers:
+          - Ref: RDSInstance
+      DependsOn: RDSProxy
+
+  Outputs:
+    RDSProxyEndpoint:
+      Description: "Endpoint of the RDS Proxy"
+      Value:
+        Fn::GetAtt:
+          - RDSProxy
+          - Endpoint
