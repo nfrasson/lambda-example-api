@@ -1,6 +1,9 @@
 service: lambda-api-example
 frameworkVersion: "3"
 
+plugins:
+  - serverless-plugin-datadog
+
 provider:
   name: aws
   stage: dev
@@ -21,6 +24,13 @@ provider:
     subnetIds:
       - Ref: SubnetA
       - Ref: SubnetB
+
+custom: 
+  datadog:
+    logLevel: 'WARN'
+    captureLambdaPayload: true
+    enableSourceCodeIntegration: false
+    apiKey: ${env:DATADOG_API_KEY}
 
 layers:
   layerDefault:

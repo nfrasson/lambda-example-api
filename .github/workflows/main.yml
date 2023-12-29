@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+env:
+  DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
