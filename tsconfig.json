@@ -20,6 +20,8 @@
     "paths": {
       "pg": ["layers/layerDefault/nodejs/node_modules/pg"],
       "typeorm": ["layers/layerDefault/nodejs/node_modules/typeorm"],
+      "bcryptjs": ["layers/layerDefault/nodejs/node_modules/bcryptjs"],
+      "jsonwebtoken": ["layers/layerDefault/nodejs/node_modules/jsonwebtoken"],
       "aws-lambda": ["layers/layerDefault/nodejs/node_modules/aws-lambda"],
       "class-validator": [
         "layers/layerDefault/nodejs/node_modules/class-validator"

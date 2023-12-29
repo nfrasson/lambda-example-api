@@ -1,4 +1,4 @@
-name: Deploy SAM Application
+name: Deploy Serverless Application
 
 on:
   push:

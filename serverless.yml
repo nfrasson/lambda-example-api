@@ -14,6 +14,7 @@ provider:
   environment:
     POSTGRES_USER: mydbuser
     POSTGRES_PASSWORD: mydbpassword
+    JWT_SECRET: myjwtsecret
   vpc:
     securityGroupIds:
       - Ref: LambdaSecurityGroup
